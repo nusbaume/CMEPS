@@ -43,8 +43,10 @@ contains
        sen, lat, lwup, evap,                 &
        taux, tauy, tref, qref,               &
        add_gusts, aofluxes_use_shr_wv_sat,   &
-       duu10n, ugust_out, u10res, &
-       ustar_sv, re_sv, ssq_sv)
+       duu10n, ugust_out, u10res,            &
+       ustar_sv, re_sv, ssq_sv,              &
+       qbot_wtracers, roce_wtracers,         &
+       evap_wtracers, qref_wtracers)
 
     !--- input arguments --------------------------------
     integer  ,intent(in) :: logunit
@@ -83,6 +85,13 @@ contains
     real(R8),intent(out),optional :: ustar_sv(nMax) ! diag: ustar
     real(R8),intent(out),optional :: re_sv (nMax)   ! diag: sqrt of exchange coefficient (water)
     real(R8),intent(out),optional :: ssq_sv (nMax)  ! diag: sea surface humidity (kg/kg)
+
+    !--- optional water tracer/isotope arguments --------
+    real(R8),intent(in),optional  :: qbot_wtracers(:, nMax) ! water tracer atm specific humidity (kg/kg)
+    real(r8),intent(in),optional  :: roce_wtracers(:, nMax) ! ratio of water tracer to total water in surface ocean (unitless)
+
+    real(R8),intent(out),optional :: evap_wtracers(:, nMax) ! water tracer flux: evap ((kg/s)/m^2)
+    real(R8),intent(out),optional :: qref_wtracers(:, nMax) ! diag: water tracer 2m ref humidity (kg/kg)
 
     !--- local constants --------------------------------
     real(R8),parameter :: zref  = 10.0_R8 ! reference height (m)
@@ -323,6 +332,19 @@ contains
           if (present(re_sv   )) re_sv(n)    = re
           if (present(ssq_sv  )) ssq_sv(n)   = ssq
 
+          !------------------------------------------------------------
+          ! Calculate optional water tracer atm/ocn fluxes and 2m ref Q
+          !------------------------------------------------------------
+          if (present(qbot_wtracers)) then
+             call wtracer_atmocn_flux_Large(ts(n),   ssq,   rbot(n), &
+                                            zbot(n), ustar,          &
+                                            re,      fac,            &
+                                            roce_wtracerS(:,n),      &
+                                            qbot_wtracers(:,n),      &
+                                            evap_wtracers(:,n),      &
+                                            qref_wtracers(:,n))
+          end if
+
        else
           !------------------------------------------------------------
           ! no valid data here -- out of domain
@@ -342,10 +364,83 @@ contains
 
           if (present(ustar_sv)) ustar_sv(n) = spval
           if (present(re_sv   )) re_sv (n) = spval
-          if (present(ssq_sv  )) ssq_sv (n) = spval
+          if (present(ssq_sv  )) ssq_sval(n) = spval
+
+          if (present(evap_wtracers)) evap_wtracers(:,n) = spval
+          if (present(qref_wtracers)) qref_tracers(:,n) = spval
+
        endif
     enddo
 
   end subroutine flux_atmOcn_large
+
+  !--------------------------------
+  ! Private water tracer subroutine
+  !--------------------------------
+
+  subroutine wtracer_atmocn_flux_Large(ts,   ssq,   rbot,            &
+                                       zbot, ustar, re,              &
+                                       roce_wtracers, qbot_wtracers, &
+                                       evap_wtracers, qref_wtracers)
+
+    ! Calculate atm/ocn fluxes and reference height humidity
+    ! for water tracers, including isotopic tracers.
+
+    use shr_const_mod,    only: gravit=>shr_const_g
+    use shr_wtracers_mod, only: shr_wtracers_get_species_type
+    use shr_wiso_mod,     only: wiso_liq_vap_equil_frac_factor
+    use shr_wiso_mod,     only: wiso_get_diffusivity_ratio
+
+    ! Input arguments
+    real(r8), intent(in) :: ts               ! sea surface temperature [K]
+    real(r8), intent(in) :: ssq              ! sea surface humidity [kg kg-1]
+    real(r8), intent(in) :: rbot             ! air density of lowest atmosphere layer [kg m-3]
+    real(r8), intent(in) :: zbot             ! height of lowest atmosphere layer [m]
+    real(r8), intent(in) :: ustar            ! surface friction velocity [m s-1]
+    real(r8), intent(in) :: re               ! sqrt of exchange coefficient (water) [1]
+    real(r8), intent(in) :: fac              ! vertical interpolation factor for reference height [1]
+    real(r8), intent(in) :: roce_wtracers(:) ! sea surface water tracer ratio [1]
+    real(r8), intent(in) :: qbot_wtracers(:) ! water tracer specific humidity [kg kg-1]
+    real(r8), intent(in) :: roce_wtracers(:) ! ratio of water tracer to bulk water in surface ocean [unitless]
+
+    ! Output arguments
+    real(r8), intent(out) :: evap_wtracers(:) ! water tracer atm/ocn flux [kg m-2 s-1]
+    real(r8), intent(out) :: qref_wtracers(:) ! reference (two meter) water tracer specific humidity [kg kg-1]
+
+    ! Local variables
+    real(r8) :: zoq, equil_frac, kinetic_frac, diff_ratio
+    real(r8) :: wt_ssq
+    integer :: wtrac_idx, iso_spc_idx
+
+    ! Calculate roughness length for water using Charnock's relation (https://glossary.ametsoc.org/wiki/charnock-s-relation/),
+    ! which is needed for kinetic fractionation:
+    zoq = (0.015_r8*ustar**2._r8)/gravit
+
+    ! Loop over water tracers:
+    do wtrac_idx = 1, size(qbot_wtracers)
+
+      ! Get water isotope properties (will all be 1 if a bulk water tracer):
+
+      iso_spc_idx  = shr_wtracers_get_species_type(wtrac_idx)
+
+      diff_ratio   = wiso_get_diffusivity_ratio(iso_spc_idx)
+
+      equil_frac   = wiso_liq_vap_equil_frac_factor(iso_spc_idx, ts)
+
+      kinetic_frac = icam_atm_ocn_kinetic_frac_factor(rbot, zbot, zoq, ustar, diff_ratio)
+
+      ! Calcuate water tracer sea surface humidity.  For isotopes this assumes that the
+      ! vapor is in thermodynamic equilibrium (RH = 100 %) with the sea water.
+      wt_ssq = ssq * roce_wtracers(wtrac_idx) / equil_frac
+
+      ! Calculate tracer evaporation:
+      evap_wtracers(wtrac_idx) = rbot * kinetic_frac * ustar * re * (qbot_wtracers(wtrac_idx) - wt_ssq)
+
+      ! Calculate two meter reference humidity:
+      qref_wtracers(wtrac_idx) = qbot_wtracers(wtrac_idx) - (qbot_wtracers(wtrac_idx) - wt_ssq) * fac
+
+    end do !water tracers
+
+  end subroutine
 
 end module flux_atmOcn_large_mod

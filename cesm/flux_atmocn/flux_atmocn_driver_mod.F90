@@ -17,17 +17,19 @@ module flux_atmocn_driver_mod
 
 contains
 
-  subroutine flux_atmOcn_driver(logunit, nMax, &
-       zbot, ubot, vbot, thbot,                &
-       qbot,  rainc, rbot,                     &
-       tbot, us, vs, pslv,                     &
-       ts, mask,  seq_flux_atmocn_minwind,     &
-       sen, lat, lwup, evap,                   &
-       taux, tauy, tref, qref,                 &
-       ocn_surface_flux_scheme,                &
-       add_gusts, aofluxes_use_shr_wv_sat,     &
-       duu10n, ugust_out, u10res,              &
-       ustar_sv, re_sv, ssq_sv, missval)
+  subroutine flux_atmOcn_driver(logunit, nMax,         &
+       zbot, ubot, vbot, thbot,                        &
+       qbot,  rainc, rbot,                             &
+       tbot, us, vs, pslv,                             &
+       ts, mask,  seq_flux_atmocn_minwind,             &
+       sen, lat, lwup, evap,                           &
+       taux, tauy, tref, qref,                         &
+       ocn_surface_flux_scheme,                        &
+       add_gusts, aofluxes_use_shr_wv_sat,             &
+       duu10n, ugust_out, u10res,                      &
+       ustar_sv, re_sv, ssq_sv, missval,               &
+       shum_wtracers, roce_wtracers,                   &
+       evap_wtracers, qref_wtracers)
 
     !--- input arguments --------------------------------
     integer  , intent(in) :: logunit
@@ -68,8 +70,16 @@ contains
     real(R8),intent(out),optional :: ssq_sv  (nMax) ! diag: sea surface humidity (kg/kg)
     real(R8),intent(in) ,optional :: missval        ! masked value
 
+    ! Water tracer/isotope variables
+    real(R8),intent(in) ,optional :: shum_wtracers(:,:) ! atm water tracer specific humidity (ntracers x nMax)
+    real(R8),intent(in) ,optional :: roce_wtracers(:,:) ! ratio of water tracer to total water at ocean surface (ntracers x nMax)
+    real(R8),intent(out),optional :: evap_wtracers(:,:) ! water tracer evaporation flux (ntracers x nMax)
+    real(R8),intent(out),optional :: qref_wtracers(:,:) ! water tracer 2m ref humidity (ntracers x nMax)
+
     !--- local variables --------------------------------
     integer  :: n
+    integer  :: it
+    integer  :: n_tracers
     real(R8) :: spval  ! local missing value
     !--------------------------------------------------------------------------------
 
@@ -97,8 +107,13 @@ contains
             sen, lat, lwup,  evap,                &
             taux, tauy, tref, qref,               &
             add_gusts, aofluxes_use_shr_wv_sat,   &
-            duu10n, ugust_out, u10res, &
-            ustar_sv=ustar_sv, re_sv=re_sv, ssq_sv=ssq_sv)
+            duu10n, ugust_out, u10res,            &
+            ustar_sv=ustar_sv, re_sv=re_sv,       &
+            ssq_sv=ssq_sv,                        &
+            qbot_wtracers=shum_wtracers,          &
+            roce_wtracers=roce_wtracers,          &
+            evap_wtracers=evap_wtracers,          &
+            qref_wtracers=qref_wtracers)
 
     else if (ocn_surface_flux_scheme == ocn_flux_scheme_coare) then
 
@@ -138,6 +153,24 @@ contains
 
        call shr_sys_abort("ocn_srfuace_flux_scheme = "// toString(ocn_surface_flux_scheme)//" is not supported")
 
+    end if
+
+    ! Compute water tracer evaporation and 2m ref humidity using bulk flux ratios
+    if (present(shum_wtracers) .and. present(evap_wtracers) .and. present(qref_wtracers)) then
+       n_tracers = size(shum_wtracers, dim=1)
+       do n = 1, nMax
+          if (mask(n) /= 0) then
+             if (qbot(n) /= 0._R8) then
+                do it = 1, n_tracers
+                   evap_wtracers(it,n) = evap(n) * (shum_wtracers(it,n) / qbot(n))
+                   qref_wtracers(it,n) = qref(n) * (shum_wtracers(it,n) / qbot(n))
+                end do
+             else
+                evap_wtracers(:,n) = 0._R8
+                qref_wtracers(:,n) = 0._R8
+             end if
+          end if
+       end do
     end if
 
   end subroutine flux_atmOcn_driver
