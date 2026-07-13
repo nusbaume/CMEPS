@@ -42,6 +42,8 @@ module med_phases_aofluxes_mod
   use shr_const_mod         , only : pi => SHR_CONST_PI
 #endif
   use shr_log_mod           , only : shr_log_error
+  use wtracers_mod          , only : wtracers_present, wtracers_get_num_tracers
+  use wtracers_mod          , only : wtracers_is_wtracer_field, WTRACERS_SUFFIX
   implicit none
   private
 
@@ -71,6 +73,7 @@ module med_phases_aofluxes_mod
   private :: set_aoflux_in_pointers
   private :: set_aoflux_out_pointers
   private :: fldbun_getfldptr
+  private :: fldbun_getfldptr_2d
 
   !--------------------------------------------------------------------------
   ! Private data
@@ -106,48 +109,52 @@ module med_phases_aofluxes_mod
 
   type aoflux_in_type
      ! input: ocn
-     real(R8) , pointer :: uocn        (:) => null() ! ocn velocity, zonal
-     real(R8) , pointer :: vocn        (:) => null() ! ocn velocity, meridional
-     real(R8) , pointer :: tocn        (:) => null() ! ocean temperature
+     real(R8) , pointer :: uocn          (:)   => null() ! ocn velocity, zonal
+     real(R8) , pointer :: vocn          (:)   => null() ! ocn velocity, meridional
+     real(R8) , pointer :: tocn          (:)   => null() ! ocean temperature
+     real(R8) , pointer :: roce_wtracers (:,:) => null() ! ocn surface water tracer ratios (ntracers x lsize)
 
      ! input: atm
-     real(R8) , pointer :: zbot        (:) => null() ! atm level height
-     real(R8) , pointer :: ubot        (:) => null() ! atm velocity, zonal
-     real(R8) , pointer :: vbot        (:) => null() ! atm velocity, meridional
-     real(R8) , pointer :: usfc        (:) => null() ! atm surface velocity, zonal
-     real(R8) , pointer :: vsfc        (:) => null() ! atm surface velocity, meridional
-     real(R8) , pointer :: thbot       (:) => null() ! atm potential T
-     real(R8) , pointer :: shum        (:) => null() ! atm specific humidity
-     real(R8) , pointer :: pbot        (:) => null() ! atm bottom pressure
-     real(R8) , pointer :: psfc        (:) => null() ! atm surface pressure
-     real(R8) , pointer :: dens        (:) => null() ! atm bottom density
-     real(R8) , pointer :: tbot        (:) => null() ! atm bottom surface T
-     real(R8) , pointer :: lwdn        (:) => null() ! atm downward longwave heat flux
-     real(R8) , pointer :: rainc       (:) => null() ! convective rain flux
+     real(R8) , pointer :: zbot          (:)   => null() ! atm level height
+     real(R8) , pointer :: ubot          (:)   => null() ! atm velocity, zonal
+     real(R8) , pointer :: vbot          (:)   => null() ! atm velocity, meridional
+     real(R8) , pointer :: usfc          (:)   => null() ! atm surface velocity, zonal
+     real(R8) , pointer :: vsfc          (:)   => null() ! atm surface velocity, meridional
+     real(R8) , pointer :: thbot         (:)   => null() ! atm potential T
+     real(R8) , pointer :: shum          (:)   => null() ! atm specific humidity (bulk)
+     real(R8) , pointer :: shum_wtracers (:,:) => null() ! atm water tracer specific humidity (ntracers x lsize)
+     real(R8) , pointer :: pbot          (:)   => null() ! atm bottom pressure
+     real(R8) , pointer :: psfc          (:)   => null() ! atm surface pressure
+     real(R8) , pointer :: dens          (:)   => null() ! atm bottom density
+     real(R8) , pointer :: tbot          (:)   => null() ! atm bottom surface T
+     real(R8) , pointer :: lwdn          (:)   => null() ! atm downward longwave heat flux
+     real(R8) , pointer :: rainc         (:)   => null() ! convective rain flux (bulk)
      ! local size and computational mask and area: on aoflux grid
-     integer            :: lsize                     ! local size
-     integer  , pointer :: mask        (:) => null() ! integer ocn domain mask: 0 <=> inactive cell
-     real(R8) , pointer :: rmask       (:) => null() ! real    ocn domain mask: 0 <=> inactive cell
-     real(R8) , pointer :: garea       (:) => null() ! atm grid area
+     integer            :: lsize                        ! local size
+     integer  , pointer :: mask          (:)   => null() ! integer ocn domain mask: 0 <=> inactive cell
+     real(R8) , pointer :: rmask         (:)   => null() ! real    ocn domain mask: 0 <=> inactive cell
+     real(R8) , pointer :: garea         (:)   => null() ! atm grid area
   end type aoflux_in_type
 
   type aoflux_out_type
-     real(R8) , pointer :: sen         (:) => null() ! heat flux: sensible
-     real(R8) , pointer :: lat         (:) => null() ! heat flux: latent
-     real(R8) , pointer :: lwup        (:) => null() ! lwup over ocean
-     real(R8) , pointer :: evap        (:) => null() ! water flux: evaporation
-     real(R8) , pointer :: taux        (:) => null() ! wind stress, zonal
-     real(R8) , pointer :: tauy        (:) => null() ! wind stress, meridional
-     real(R8) , pointer :: tref        (:) => null() ! diagnostic: 2m ref T
-     real(R8) , pointer :: qref        (:) => null() ! diagnostic: 2m ref Q
-     real(R8) , pointer :: u10         (:) => null() ! diagnostic: 10m wind speed
-     real(R8) , pointer :: duu10n      (:) => null() ! diagnostic: 10m wind speed squared
-     real(R8) , pointer :: ugust_out   (:) => null() ! diagnostic: gust wind added
-     real(R8) , pointer :: u10_withGust(:) => null() ! diagnostic: gust wind added
-     real(R8) , pointer :: u10res      (:) => null() ! diagnostic: no gust wind added
-     real(R8) , pointer :: ustar       (:) => null() ! saved ustar
-     real(R8) , pointer :: re          (:) => null() ! saved re
-     real(R8) , pointer :: ssq         (:) => null() ! saved sq
+     real(R8) , pointer :: sen          (:)   => null() ! heat flux: sensible
+     real(R8) , pointer :: lat          (:)   => null() ! heat flux: latent
+     real(R8) , pointer :: lwup         (:)   => null() ! lwup over ocean
+     real(R8) , pointer :: evap         (:)   => null() ! water flux: evaporation (bulk)
+     real(R8) , pointer :: evap_wtracers(:,:) => null() ! water tracer flux: evaporation (ntracers x lsize)
+     real(R8) , pointer :: taux         (:)   => null() ! wind stress, zonal
+     real(R8) , pointer :: tauy         (:)   => null() ! wind stress, meridional
+     real(R8) , pointer :: tref         (:)   => null() ! diagnostic: 2m ref T
+     real(R8) , pointer :: qref         (:)   => null() ! diagnostic: 2m ref Q (bulk)
+     real(R8) , pointer :: qref_wtracers(:,:) => null() ! diagnostic: water tracer 2m ref Q (ntracers x lsize)
+     real(R8) , pointer :: u10          (:)   => null() ! diagnostic: 10m wind speed
+     real(R8) , pointer :: duu10n       (:)   => null() ! diagnostic: 10m wind speed squared
+     real(R8) , pointer :: ugust_out    (:)   => null() ! diagnostic: gust wind added
+     real(R8) , pointer :: u10_withGust (:)   => null() ! diagnostic: gust wind added
+     real(R8) , pointer :: u10res       (:)   => null() ! diagnostic: no gust wind added
+     real(R8) , pointer :: ustar        (:)   => null() ! saved ustar
+     real(R8) , pointer :: re           (:)   => null() ! saved re
+     real(R8) , pointer :: ssq          (:)   => null() ! saved sq
   end type aoflux_out_type
 
   character(*), parameter :: u_FILE_u = &
@@ -623,6 +630,7 @@ contains
 
     use med_methods_mod, only : FB_init => med_methods_FB_init
     use med_map_mod    , only : med_map_rh_is_created, med_map_field
+    use wtracers_mod   , only : wtracers_present, WTRACERS_SUFFIX
 
     ! Arguments
     type(ESMF_GridComp)   , intent(inout) :: gcomp
@@ -657,12 +665,20 @@ contains
     ! input fields from atm and ocn on atm grid
     ! ------------------------
 
-    allocate(fldnames_ocn_in(4))
-    fldnames_ocn_in = (/'So_omask','So_t    ','So_u    ','So_v    '/)
-    call med_field_info_array_from_names_wtracers( &
+    if (wtracers_present()) then
+       allocate(fldnames_ocn_in(5))
+       fldnames_ocn_in(1:4) = (/'So_omask','So_t    ','So_u    ','So_v    '/)
+       fldnames_ocn_in(5) = 'So_roce'//WTRACERS_SUFFIX
+
+       call med_field_info_array_from_names_wtracers( &
          field_names = fldnames_ocn_in, &
          field_info_array = field_info_array, &
          rc = rc)
+    else
+       allocate(fldnames_ocn_in(4))
+       fldnames_ocn_in = (/'So_omask','So_t    ','So_u    ','So_v    '/)
+    end if
+
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call FB_init(FBocn_a, is_local%wrap%flds_scalar_name, &
          field_info_array=field_info_array, FBgeom=is_local%wrap%FBImp(compatm,compatm), name='FBocn_a', rc=rc)
@@ -1008,7 +1024,7 @@ contains
     !
     ! Local variables
     type(InternalState)      :: is_local
-    integer                  :: n                          ! indices
+    integer                  :: n                           ! index
     real(r8), parameter      :: qmin = 1.0e-8_r8
     real(r8), parameter      :: p0 = 100000.0_r8           ! reference pressure in Pa
     real(r8), parameter      :: rcp = 0.286_r8             ! gas constant of air / specific heat capacity at a constant pressure
@@ -1098,9 +1114,12 @@ contains
          taux=aoflux_out%taux, tauy=aoflux_out%tauy, tref=aoflux_out%tref, qref=aoflux_out%qref, &
          ocn_surface_flux_scheme=ocn_surface_flux_scheme, &
          add_gusts=add_gusts, aofluxes_use_shr_wv_sat=aofluxes_use_shr_wv_sat, &
-         duu10n=aoflux_out%duu10n, ugust_out = aoflux_out%ugust_out, u10res = aoflux_out%u10res, &
-         ustar_sv=aoflux_out%ustar, re_sv=aoflux_out%re, ssq_sv=aoflux_out%ssq, missval=0.0_r8)
-
+         duu10n=aoflux_out%duu10n, ugust_out=aoflux_out%ugust_out, u10res=aoflux_out%u10res, &
+         ustar_sv=aoflux_out%ustar, re_sv=aoflux_out%re, ssq_sv=aoflux_out%ssq, missval=0.0_r8, &
+         shum_wtracers=aoflux_in%shum_wtracers,  &
+         roce_wtracers=aoflux_in%roce_wtracers,  &
+         evap_wtracers=aoflux_out%evap_wtracers, &
+         qref_wtracers=aoflux_out%qref_wtracers)
 #else
 #ifdef UFS_AOFLUX
      if (trim(aoflux_code) == 'ccpp') then
@@ -1200,7 +1219,8 @@ contains
 
     ! aoflux is on agrid and this maps the ogrid input to the agrid
 
-    use med_map_mod, only : med_map_RH_is_created
+    use med_map_mod,  only : med_map_RH_is_created
+    use wtracers_mod, only : wtracers_is_wtracer_field
 
     ! Arguments
     type(ESMF_GridComp)  :: gcomp
@@ -1212,6 +1232,7 @@ contains
     type(ESMF_Field)    :: field_dst
     real(r8), pointer   :: data_normdst(:)
     real(r8), pointer   :: data_dst(:)
+    real(r8), pointer   :: data_dst_2d(:,:)
     integer             :: nf,n
     integer             :: maptype
     character(*),parameter  :: subName = '(med_aofluxes_map_ogrid2agrid_input) '
@@ -1254,15 +1275,28 @@ contains
        if (maptype /= mapfcopy) then
           call ESMF_FieldGet(is_local%wrap%field_normOne(compocn,compatm,maptype), farrayPtr=data_normdst, rc=rc)
           if (chkerr(rc,__LINE__,u_FILE_u)) return
-          call ESMF_FieldGet(field_dst, farrayptr=data_dst, rc=rc)
-          if (chkerr(rc,__LINE__,u_FILE_u)) return
-          do n = 1,size(data_dst)
-             if (data_normdst(n) == 0.0_r8) then
-                data_dst(n) = 0.0_r8
-             else
-                data_dst(n) = data_dst(n)/data_normdst(n)
-             end if
-          end do
+          if (wtracers_is_wtracer_field(trim(fldnames_ocn_in(nf)))) then
+             ! Tracer fields (rank-2) are normalized per spatial point across all tracers
+             call ESMF_FieldGet(field_dst, farrayptr=data_dst_2d, rc=rc)
+             if (chkerr(rc,__LINE__,u_FILE_u)) return
+             do n = 1,size(data_dst_2d, dim=2)
+                if (data_normdst(n) == 0.0_r8) then
+                   data_dst_2d(:,n) = 0.0_r8
+                else
+                   data_dst_2d(:,n) = data_dst_2d(:,n)/data_normdst(n)
+                end if
+             end do
+          else
+             call ESMF_FieldGet(field_dst, farrayptr=data_dst, rc=rc)
+             if (chkerr(rc,__LINE__,u_FILE_u)) return
+             do n = 1,size(data_dst)
+                if (data_normdst(n) == 0.0_r8) then
+                   data_dst(n) = 0.0_r8
+                else
+                   data_dst(n) = data_dst(n)/data_normdst(n)
+                end if
+             end do
+          end if
        end if
     end do
 
@@ -1578,6 +1612,7 @@ end subroutine med_aofluxes_map_ogrid2xgrid_input
     ! Note that if computation is on the xgrid, fldbun_a and fldbun_o are both fldbun_x
 
     use med_methods_mod , only : FB_fldchk    => med_methods_FB_FldChk
+    use wtracers_mod    , only : wtracers_present()
 
     ! input/output variables
     type(ESMF_FieldBundle)     , intent(inout) :: fldbun_a
@@ -1586,6 +1621,9 @@ end subroutine med_aofluxes_map_ogrid2xgrid_input
     integer                    , intent(out)   :: lsize
     type(ESMF_Xgrid), optional , intent(inout) :: xgrid
     integer                    , intent(out)   :: rc
+
+    ! local variables
+    integer :: n_tracers
     !-----------------------------------------------------------------------
 
     rc = ESMF_SUCCESS
@@ -1627,6 +1665,14 @@ end subroutine med_aofluxes_map_ogrid2xgrid_input
           ! in the subroutine interface
           allocate(aoflux_in%rainc(1))
        end if
+    end if
+
+    ! water tracer specific humidity
+    if (wtracers_present()) then
+       n_tracers = wtracers_get_num_tracers()
+       call fldbun_getfldptr_2d(fldbun_a, 'Sa_shum'//WTRACERS_SUFFIX, aoflux_in%shum_wtracers, &
+            n_tracers=n_tracers, xgrid=xgrid, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
     end if
 
     ! extra fields for ufs.frac.aoflux
@@ -1686,6 +1732,14 @@ end subroutine med_aofluxes_map_ogrid2xgrid_input
     call fldbun_getfldptr(fldbun_o, 'So_v', aoflux_in%vocn, xgrid=xgrid, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
 
+    ! ocean surface isotope ratio (tracer-only)
+    if (wtracers_present()) then
+       n_tracers = wtracers_get_num_tracers()
+       call fldbun_getfldptr_2d(fldbun_o, 'So_roce'//WTRACERS_SUFFIX, aoflux_in%roce_wtracers, &
+            n_tracers=n_tracers, xgrid=xgrid, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    end if
+
   end subroutine set_aoflux_in_pointers
 
   !================================================================================
@@ -1697,6 +1751,9 @@ end subroutine med_aofluxes_map_ogrid2xgrid_input
     type(aoflux_out_type)      , intent(inout) :: aoflux_out
     type(ESMF_Xgrid), optional , intent(inout) :: xgrid
     integer                    , intent(out)   :: rc
+
+    ! local variables
+    integer :: n_tracers
 
     rc = ESMF_SUCCESS
     !-----------------------------------------------------------------------
@@ -1729,6 +1786,17 @@ end subroutine med_aofluxes_map_ogrid2xgrid_input
     if (chkerr(rc,__LINE__,u_FILE_u)) return
     call fldbun_getfldptr(fldbun, 'Faox_lwup', aoflux_out%lwup, xgrid=xgrid, rc=rc)
     if (chkerr(rc,__LINE__,u_FILE_u)) return
+
+    ! water tracer evaporation and 2m reference humidity
+    if (wtracers_present()) then
+       n_tracers = wtracers_get_num_tracers()
+       call fldbun_getfldptr_2d(fldbun, 'Faox_evap'//WTRACERS_SUFFIX, aoflux_out%evap_wtracers, &
+            n_tracers=n_tracers, xgrid=xgrid, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call fldbun_getfldptr_2d(fldbun, 'So_qref'//WTRACERS_SUFFIX, aoflux_out%qref_wtracers, &
+            n_tracers=n_tracers, xgrid=xgrid, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    end if
 
     if (add_gusts) then
        call fldbun_getfldptr(fldbun, 'So_ugustOut', aoflux_out%ugust_out, xgrid=xgrid, rc=rc)
@@ -1772,5 +1840,42 @@ end subroutine med_aofluxes_map_ogrid2xgrid_input
     end if
 
   end subroutine fldbun_getfldptr
+
+  !================================================================================
+  subroutine fldbun_getfldptr_2d(fldbun, fldname, fldptr, n_tracers, xgrid, rc)
+
+    ! Retrieve a rank-2 pointer (n_tracers x n_spatial) into a water tracer ESMF field.
+    ! When xgrid is present the field is created on the xgrid with an ungridded dimension
+    ! of size n_tracers and added to the bundle; otherwise the field is retrieved by name.
+
+    ! input/output variables
+    type(ESMF_FieldBundle)     , intent(inout) :: fldbun
+    character(len=*)           , intent(in)    :: fldname
+    real(r8)                   , pointer       :: fldptr(:,:)
+    integer                    , intent(in)    :: n_tracers
+    type(ESMF_Xgrid), optional , intent(in)    :: xgrid
+    integer                    , intent(out)   :: rc
+
+    ! local variables
+    type(ESMF_Field) :: lfield
+    !-----------------------------------------------------------------------
+    rc = ESMF_SUCCESS
+
+    if (present(xgrid)) then
+       lfield = ESMF_FieldCreate(xgrid, typekind=ESMF_TYPEKIND_R8, name=trim(fldname), &
+            ungriddedLBound=[1], ungriddedUBound=[n_tracers], rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldBundleAdd(fldbun, (/lfield/), rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldGet(lfield, farrayPtr=fldptr, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    else
+       call ESMF_FieldBundleGet(fldbun, trim(fldname), field=lfield, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+       call ESMF_FieldGet(lfield, farrayPtr=fldptr, rc=rc)
+       if (chkerr(rc,__LINE__,u_FILE_u)) return
+    end if
+
+  end subroutine fldbun_getfldptr_2d
 
 end module med_phases_aofluxes_mod
