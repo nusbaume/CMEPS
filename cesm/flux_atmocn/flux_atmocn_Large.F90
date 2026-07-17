@@ -379,7 +379,8 @@ contains
   !--------------------------------
 
   subroutine wtracer_atmocn_flux_Large(ts,   ssq,   rbot,            &
-                                       zbot, ustar, re, fac,         &
+                                       zbot, ustar, re,              &
+                                       qref_interp_fac,              &
                                        roce_wtracers, qbot_wtracers, &
                                        evap_wtracers, qref_wtracers)
 

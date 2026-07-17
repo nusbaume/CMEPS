@@ -129,6 +129,11 @@ contains
     real(R8)    :: tdiff(nMax) ! tbot - ts
     real(R8)    :: vscl
 
+    !--- for water tracers/isotopes ---------------------
+
+    real(R8)    :: qstar_interp_fac, qref_interp_fac ! vertical interpolation factors [unitless]
+    real(R8)    :: jcool, dter, Le                   ! cool-skin params plus modified latent heating constant
+
     !--- functions ---
     qsat(Tk)   = 640380.0_R8 / exp(5107.4_R8/Tk)
 
@@ -284,7 +289,7 @@ contains
     real(R8), intent(out) :: Cd,Ch,Ce
     real(R8), intent(out) :: trf,qrf,urf,vrf
     real(R8), intent(out) :: qstar_interp_fac, qref_interp_fac
-    real(R8), intent(out) :: jcool, dter, Le 
+    real(R8), intent(out) :: jcool, dter, Le
 
     ! Local variables
     real(R8) :: ua,va,ta,q,rb,us,vs,ts,qs,zi,zu,zt,zq,zru,zrq,zrt       ! internal vars
@@ -467,7 +472,7 @@ contains
 
 
     ! Output vertical interpolation factor for reference
-    ! humidity (needed by water tracers/isotopes):    
+    ! humidity (needed by water tracers/isotopes):
     qref_interp_fac = (log(zrq/zoq)-psit_30(zrq/L))/(log(zq/zoq)-psit_30(zq/L))
 
   end subroutine cor30a
@@ -556,7 +561,7 @@ contains
     use shr_wtracers_mod, only: shr_wtracers_get_species_type
     use shr_wiso_mod,     only: wiso_liq_vap_equil_frac_factor
     use shr_wiso_mod,     only: wiso_get_diffusivity_ratio
- 
+
     use shr_const_mod,    only: Rgas=>shr_const_rgas
 
     ! Input arguments
