@@ -88,7 +88,7 @@ contains
 
     !--- optional water tracer/isotope arguments --------
     real(R8),intent(in),optional  :: qbot_wtracers(:, nMax) ! water tracer atm specific humidity (kg/kg)
-    real(r8),intent(in),optional  :: roce_wtracers(:, nMax) ! ratio of water tracer to total water in surface ocean (unitless)
+    real(R8),intent(in),optional  :: roce_wtracers(:, nMax) ! ratio of water tracer to total water in surface ocean (unitless)
 
     real(R8),intent(out),optional :: evap_wtracers(:, nMax) ! water tracer flux: evap ((kg/s)/m^2)
     real(R8),intent(out),optional :: qref_wtracers(:, nMax) ! diag: water tracer 2m ref humidity (kg/kg)
@@ -379,7 +379,7 @@ contains
   !--------------------------------
 
   subroutine wtracer_atmocn_flux_Large(ts,   ssq,   rbot,            &
-                                       zbot, ustar, re,              &
+                                       zbot, ustar, re, fac,         &
                                        roce_wtracers, qbot_wtracers, &
                                        evap_wtracers, qref_wtracers)
 
@@ -398,7 +398,7 @@ contains
     real(r8), intent(in) :: zbot             ! height of lowest atmosphere layer [m]
     real(r8), intent(in) :: ustar            ! surface friction velocity [m s-1]
     real(r8), intent(in) :: re               ! sqrt of exchange coefficient (water) [1]
-    real(r8), intent(in) :: fac              ! vertical interpolation factor for reference height [1]
+    real(r8), intent(in) :: qref_interp_fac  ! vertical interpolation factor for reference height [1]
     real(r8), intent(in) :: roce_wtracers(:) ! sea surface water tracer ratio [1]
     real(r8), intent(in) :: qbot_wtracers(:) ! water tracer specific humidity [kg kg-1]
     real(r8), intent(in) :: roce_wtracers(:) ! ratio of water tracer to bulk water in surface ocean [unitless]
@@ -437,7 +437,7 @@ contains
       evap_wtracers(wtrac_idx) = rbot * kinetic_frac * ustar * re * (qbot_wtracers(wtrac_idx) - wt_ssq)
 
       ! Calculate two meter reference humidity:
-      qref_wtracers(wtrac_idx) = qbot_wtracers(wtrac_idx) - (qbot_wtracers(wtrac_idx) - wt_ssq) * fac
+      qref_wtracers(wtrac_idx) = qbot_wtracers(wtrac_idx) - (qbot_wtracers(wtrac_idx) - wt_ssq) * qref_interp_fac
 
     end do !water tracers
 

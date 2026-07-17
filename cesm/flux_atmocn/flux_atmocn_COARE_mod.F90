@@ -47,7 +47,9 @@ contains
        taux ,tauy, tref, qref,                        &
        aofluxes_use_shr_wv_sat,                       &
        duu10n, ugust_out, u10res,                     &
-       ustar_sv, re_sv, ssq_sv)
+       ustar_sv, re_sv, ssq_sv,                       &
+       qbot_wtracers, roce_wtracers,                  &
+       evap_wtracers, qref_wtracers)
 
     !--- input arguments --------------------------------
     integer  , intent(in) :: logunit
@@ -85,6 +87,13 @@ contains
     real(R8),intent(out),optional :: ustar_sv(nMax) ! diag: ustar
     real(R8),intent(out),optional :: re_sv   (nMax) ! diag: sqrt of exchange coefficient (water)
     real(R8),intent(out),optional :: ssq_sv  (nMax) ! diag: sea surface humidity  (kg/kg)
+
+    !--- optional water tracer/isotope arguments --------
+    real(R8),intent(in),optional  :: qbot_wtracers(:, nMax) ! water tracer atm specific humidity (kg/kg)
+    real(R8),intent(in),optional  :: roce_wtracers(:, nMax) ! ratio of water tracer to total water in surface ocean (unitless)
+
+    real(R8),intent(out),optional :: evap_wtracers(:, nMax) ! water tracer flux: evap ((kg/s)/m^2)
+    real(R8),intent(out),optional :: qref_wtracers(:, nMax) ! diag: water tracer 2m ref humidity (kg/kg)
 
     !--- local constants --------------------------------
     real(R8),parameter :: zref  = 10.0_R8 ! reference height           (m)
@@ -168,7 +177,10 @@ contains
                tau,hsb,hlb,                                    & ! out: fluxes
                zo,zot,zoq,hol,ustar,tstar,qstar,               & ! out: ss scales
                rd,rh,re,                                       & ! out: exch. coeffs
-               trf,qrf,urf,vrf)                                  ! out: reference-height params
+               trf,qrf,urf,vrf,                                & ! out: reference-height params
+               qstar_interp_fac, qref_interp_fac,              & ! out: vertical interpolation factors (for water tracers)
+               jcool, dter, Le)                                  ! out: cool skin parameters and modified latent heat needed
+                                                                 !      for water tracers.
 
           ! for the sake of maintaining same defs
           hol = zbot(n)/hol
@@ -205,6 +217,22 @@ contains
           u10res(n) = sqrt(duu10n(n))
           ugust_out(n) = 0._r8
 
+          !------------------------------------------------------------
+          ! Calculate optional water tracer atm/ocn fluxes and 2m ref Q
+          !------------------------------------------------------------
+          if (present(qbot_wtracers)) then
+             call wtracer_atmocn_flux_COARE(ts(n),   ssq,   rbot(n), &
+                                            zbot(n), ustar,          &
+                                            qstar_interp_fac,        &
+                                            qref_interp_fac,         &
+                                            fac,   zoq,              &
+                                            jcool, dter, Le          &
+                                            roce_wtracerS(:,n),      &
+                                            qbot_wtracers(:,n),      &
+                                            evap_wtracers(:,n),      &
+                                            qref_wtracers(:,n))
+          end if
+
        else
 
           !------------------------------------------------------------
@@ -226,6 +254,9 @@ contains
           if (present(ustar_sv)) ustar_sv(n) = spval
           if (present(re_sv   )) re_sv   (n) = spval
           if (present(ssq_sv  )) ssq_sv  (n) = spval
+
+          if (present(evap_wtracers)) evap_wtracers(:,n) = spval
+          if (present(qref_wtracers)) qref_tracers(:,n)  = spval
        endif
     enddo
 
@@ -239,7 +270,10 @@ contains
         tau,hsb,hlb,                     &    ! out: fluxes
         zo,zot,zoq,L,usr,tsr,qsr,        &    ! out: ss scales
         Cd,Ch,Ce,                        &    ! out: exch. coeffs
-        trf,qrf,urf,vrf)                      ! out: reference-height params
+        trf,qrf,urf,vrf,                 &    ! out: reference-height params
+        qstar_interp_fac,qref_interp_fac,&    ! out: vertical interpolation factors (for water tracers)
+        jcool, dter, Le                  )    ! out: cool skin parameters and modified latent heat needed
+                                              !      for water tracers.
 
     ! Arguments
     real(R8), intent(in)  :: ubt,vbt,tbt,qbt,rbt
@@ -249,18 +283,19 @@ contains
     real(R8), intent(out) :: zo,zot,zoq,L,usr,tsr,qsr
     real(R8), intent(out) :: Cd,Ch,Ce
     real(R8), intent(out) :: trf,qrf,urf,vrf
+    real(R8), intent(out) :: qstar_interp_fac, qref_interp_fac
+    real(R8), intent(out) :: jcool, dter, Le 
 
     ! Local variables
     real(R8) :: ua,va,ta,q,rb,us,vs,ts,qs,zi,zu,zt,zq,zru,zrq,zrt       ! internal vars
     real(R8) :: cpa,rgas,grav,pi,von,beta                               ! phys. params
-    real(R8) :: le,rhoa,cpv                                             ! derived phys. params
+    real(R8) :: rhoa,cpv                                                ! derived phys. params
     real(R8) :: t,visa,du,dq,dt                                         ! params of problem
     real(R8) :: u10,zo10,zot10,cd10,ch10,ct10,ct,cc,ribu,zetu,l10,charn ! init vars
     real(R8) :: zet,rr,bf,ug,ut                                         ! loop iter vars
     real(R8) :: cdn_10,chn_10,cen_10                                    ! aux. output vars
     integer  :: i,nits                                                  ! iter loop counters
-    integer  :: jcool                                                   ! aux. cool-skin vars
-    real(R8) :: dter,wetc,dqer
+    real(R8) :: wetc,dqer
     !----------------------------------------------------------------
 
     ua  = ubt  !wind components (m/s) at height zu (m)
@@ -396,6 +431,10 @@ contains
     enddo
     !***************     end loop    ************
 
+    ! Output q* interpolation factor for reference
+    ! humidity (needed by water tracers/isotopes):
+    qstar_interp_fac = von/(log(zq/zoq)-psit_30(zq/L))
+
     !******** fluxes @ measurement heights zu,zt,zq ********
     tau= rhoa*usr*usr*du/ut                !stress magnitude
     hsb=-rhoa*cpa*usr*tsr                  !heat downwards
@@ -425,6 +464,11 @@ contains
     qrf=qs-dq*(log(zrq/zoq)-psit_30(zrq/L))/(log(zq/zoq)-psit_30(zq/L))
     trf=ts-dt*(log(zrt/zot)-psit_30(zrt/L))/(log(zt/zot)-psit_30(zt/L))
     trf=trf+.0098_R8*zrt
+
+
+    ! Output vertical interpolation factor for reference
+    ! humidity (needed by water tracers/isotopes):    
+    qref_interp_fac = (log(zrq/zoq)-psit_30(zrq/L))/(log(zq/zoq)-psit_30(zq/L))
 
   end subroutine cor30a
 
@@ -494,5 +538,85 @@ contains
        psit_30=(1.0_R8-f)*psik+f*psic
     endif
   end FUNCTION psit_30
+
+  !--------------------------------
+  ! Private water tracer subroutine
+  !--------------------------------
+
+  subroutine wtracer_atmocn_flux_COARE(ts,   ssq,   rbot, zbot,      &
+                                       ustar, qstar_interp_fac,      &
+                                       qref_interp_fac, zoq,         &
+                                       jcool, dter, Le,              &
+                                       roce_wtracers, qbot_wtracers, &
+                                       evap_wtracers, qref_wtracers)
+
+    ! Calculate atm/ocn fluxes and reference height humidity
+    ! for water tracers, including isotopic tracers.
+
+    use shr_wtracers_mod, only: shr_wtracers_get_species_type
+    use shr_wiso_mod,     only: wiso_liq_vap_equil_frac_factor
+    use shr_wiso_mod,     only: wiso_get_diffusivity_ratio
+ 
+    use shr_const_mod,    only: Rgas=>shr_const_rgas
+
+    ! Input arguments
+    real(r8), intent(in) :: ts               ! sea surface temperature [K]
+    real(r8), intent(in) :: ssq              ! sea surface humidity [kg kg-1]
+    real(r8), intent(in) :: rbot             ! air density of lowest atmosphere layer [kg m-3]
+    real(r8), intent(in) :: zbot             ! height of lowest atmosphere layer [m]
+    real(r8), intent(in) :: ustar            ! surface friction velocity [m s-1]
+    real(r8), intent(in) :: qstar_interp_fac ! vertical interpolation factor for reference height [1]
+    real(r8), intent(in) :: qref_interp_fac  ! vertical interpolation factor for q-star [1]
+    real(r8), intent(in) :: zoq              ! surface roughness length for water vapor [m]
+    real(r8), intent(in) :: jcool            ! surface cooling factor [1]
+    real(r8), intent(in) :: dter             ! cool-skin temperature adjustment [K]
+    real(r8), intent(in) :: Le               ! Temperature-dependent latent heat of vaporization [J kg-1]
+    real(r8), intent(in) :: roce_wtracers(:) ! sea surface water tracer ratio [1]
+    real(r8), intent(in) :: qbot_wtracers(:) ! water tracer specific humidity [kg kg-1]
+    real(r8), intent(in) :: roce_wtracers(:) ! ratio of water tracer to bulk water in surface ocean [unitless]
+
+    ! Output arguments
+    real(r8), intent(out) :: evap_wtracers(:) ! water tracer atm/ocn flux [kg m-2 s-1]
+    real(r8), intent(out) :: qref_wtracers(:) ! reference (two meter) water tracer specific humidity [kg kg-1]
+
+    ! Local variables
+    real(r8) :: equil_frac, kinetic_frac, diff_ratio
+    real(r8) :: wt_dq, wt_dqer, wt_ssq
+    integer :: wtrac_idx, iso_spc_idx
+
+    ! Loop over water tracers:
+    do wtrac_idx = 1, size(qbot_wtracers)
+
+      ! Get water isotope properties (will all be 1 if a bulk water tracer):
+
+      iso_spc_idx  = shr_wtracers_get_species_type(wtrac_idx)
+
+      diff_ratio   = wiso_get_diffusivity_ratio(iso_spc_idx)
+
+      equil_frac   = wiso_liq_vap_equil_frac_factor(iso_spc_idx, ts)
+
+      kinetic_frac = icam_atm_ocn_kinetic_frac_factor(rbot, zbot, zoq, ustar, diff_ratio)
+
+      ! Calcuate water tracer sea surface humidity.  For isotopes this assumes that the
+      ! vapor is in thermodynamic equilibrium (RH = 100 %) with the sea water.
+      wt_ssq = ssq * roce_wtracers(wtrac_idx) / equil_frac
+
+      ! Calculate difference in sea surface humidity versus humidity at lowest
+      ! atmosphere model layer:
+      wt_dq = wt_ssq - qbot_wtracers(wtrac_idx)
+
+      ! Calculate change in water tracer humidity gradient due to surface cooling:
+      wt_dqer=dter*0.622_r8*Le*wt_ssq/(Rgas*ts**2)
+
+      ! Calculate tracer evaporation:
+      evap_wtracers(wtrac_idx) = -rbot * kinetic_frac * ustar * (wt_dq-wt_dqer*jcool)*qstar_interp_fac
+
+      ! Calculate two meter reference humidity:
+      qref_wtracers(wtrac_idx) = wt_ssq - dq*qref_interp_fac
+
+    end do !water tracers
+
+  end subroutine
+
 
 end module flux_atmocn_COARE_mod
