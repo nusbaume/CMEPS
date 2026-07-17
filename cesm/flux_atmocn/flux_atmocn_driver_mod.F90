@@ -127,7 +127,12 @@ contains
             taux, tauy, tref, qref,             &
             aofluxes_use_shr_wv_sat,            &
             duu10n, ugust_out, u10res,          &
-            ustar_sv=ustar_sv, re_sv=re_sv, ssq_sv=ssq_sv)
+            ustar_sv=ustar_sv, re_sv=re_sv,     &
+            ssq_sv=ssq_sv,                      &
+            qbot_wtracers=shum_wtracers,        &
+            roce_wtracers=roce_wtracers,        &
+            evap_wtracers=evap_wtracers,        &
+            qref_wtracers=qref_wtracers)
 
     else if (ocn_surface_flux_scheme == ocn_flux_scheme_ua) then
 
@@ -137,7 +142,12 @@ contains
             qbot, rbot, tbot, us, vs, pslv, &
             ts, mask, sen, lat, lwup, evap, &
             taux, tauy, tref, qref,         &
-            duu10n, ustar_sv=ustar_sv, re_sv=re_sv, ssq_sv=ssq_sv)
+            duu10n, ustar_sv=ustar_sv,      &
+            re_sv=re_sv, ssq_sv=ssq_sv,     &
+            qbot_wtracers=shum_wtracers,    &
+            roce_wtracers=roce_wtracers,    &
+            evap_wtracers=evap_wtracers,    &
+            qref_wtracers=qref_wtracers)
 
        do n = 1,nMax
           if (mask(n) /= 0) then
@@ -153,24 +163,6 @@ contains
 
        call shr_sys_abort("ocn_srfuace_flux_scheme = "// toString(ocn_surface_flux_scheme)//" is not supported")
 
-    end if
-
-    ! Compute water tracer evaporation and 2m ref humidity using bulk flux ratios
-    if (present(shum_wtracers) .and. present(evap_wtracers) .and. present(qref_wtracers)) then
-       n_tracers = size(shum_wtracers, dim=1)
-       do n = 1, nMax
-          if (mask(n) /= 0) then
-             if (qbot(n) /= 0._R8) then
-                do it = 1, n_tracers
-                   evap_wtracers(it,n) = evap(n) * (shum_wtracers(it,n) / qbot(n))
-                   qref_wtracers(it,n) = qref(n) * (shum_wtracers(it,n) / qbot(n))
-                end do
-             else
-                evap_wtracers(:,n) = 0._R8
-                qref_wtracers(:,n) = 0._R8
-             end if
-          end if
-       end do
     end if
 
   end subroutine flux_atmOcn_driver
