@@ -203,6 +203,12 @@ contains
           lwup(n) = -loc_stebol * ts(n)**4
 
           !--- water flux ---
+          ! NOTE:  Internally the COARE algorithm uses a latent heat of evaporation (Le) that depends on the temperature.
+          !        However, other components of CESM assume a constant (273 K) latent heat factor (L), which means using Le
+          !        here to back out the "true" COARE evaporative flux results in an additional source of heating,
+          !        and thus violations in energy conservation.  So, until all other atmosphere/ocean components allow
+          !        for temperature-dependent Le values, the evaporative flux should be adjusted by Le/L,
+          !        which is done here by dividing by loc_latvap (L):
           evap(n) = lat(n)/loc_latvap
 
           !------------------------------------------------------------
@@ -616,8 +622,13 @@ contains
       ! Calculate tracer evaporation:
       evap_wtracers(wtrac_idx) = -rbot * kinetic_frac * ustar * (wt_dq-wt_dqer*jcool)*qstar_interp_fac
 
+      ! In CESM the COARE algorithm's water mass flux is adjusted by Le(T)/L, because the rest of CESM
+      ! currently doesn't account for the impact of temperature on the latent heat of evaporation. Thus
+      ! in order to match the bulk water flux this (arguably unphysical) adjustment must be made:
+      evap_wtracers(wtrac_idx) = evap_wtracers(wtrac_idx) * Le/loc_latvap
+
       ! Calculate two meter reference humidity:
-      qref_wtracers(wtrac_idx) = wt_ssq - dq*qref_interp_fac
+      qref_wtracers(wtrac_idx) = wt_ssq - wt_dq*qref_interp_fac
 
     end do !water tracers
 
