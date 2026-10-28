@@ -26,21 +26,22 @@ contains
 
   @test
   subroutine test_unstable_fluxes_are_upward()
-    ! Warm ocean under cooler, drier air: heat and moisture leave the ocean, so
-    ! sen, lat and evap are negative (fluxes are positive downward), and the wind
-    ! stress points along the wind.
+    ! Warm ocean under cooler, drier air: heat and moisture leave the ocean
+    ! so sensible and latent heat and evaporation are negative
+    ! (fluxes are positive downward), and the wind stress is
+    ! in the same direction as the wind.
     integer, parameter :: nMax = 1
-    type(flux_inputs_t) :: s
+    type(flux_inputs_t) :: state
     real(r8), dimension(nMax) :: sen, lat, lwup, evap, taux, tauy, tref, qref
     real(r8), dimension(nMax) :: duu10n, ugust_out, u10res
 
-    s = make_unstable_state(nMax)
+    state = make_unstable_state(nMax)
 
     call flux_atmOcn_large(logunit=logunit, spval=test_spval, nMax=nMax, &
-         zbot=s%zbot, ubot=s%ubot, vbot=s%vbot, thbot=s%thbot, &
-         qbot=s%qbot, rainc=s%rainc, rbot=s%rbot, &
-         tbot=s%tbot, us=s%us, vs=s%vs, pslv=s%pslv, &
-         ts=s%ts, mask=s%mask, seq_flux_atmocn_minwind=test_minwind, &
+         zbot=state%zbot, ubot=state%ubot, vbot=state%vbot, thbot=state%thbot, &
+         qbot=state%qbot, rainc=state%rainc, rbot=state%rbot, &
+         tbot=state%tbot, us=state%us, vs=state%vs, pslv=state%pslv, &
+         ts=state%ts, mask=state%mask, seq_flux_atmocn_minwind=test_minwind, &
          sen=sen, lat=lat, lwup=lwup, evap=evap, &
          taux=taux, tauy=tauy, tref=tref, qref=qref, &
          add_gusts=.false., aofluxes_use_shr_wv_sat=.true., &
