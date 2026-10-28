@@ -54,9 +54,14 @@ target_compile_options(flux_under_test PRIVATE
 #-----------------------------------------------------------------------------
 # Tests: each .pf file becomes its own ctest executable, labeled by directory.
 # Run one group with e.g. `ctest -L bulk`.
+#
+# The .pf paths must be relative: pFUnit writes the generated .F90 next to an
+# absolute-path .pf file (i.e. into the source tree), but under
+# CMAKE_CURRENT_BINARY_DIR for a relative one.
 #-----------------------------------------------------------------------------
 foreach(group bulk)
-  file(GLOB pf_files CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${group}/*.pf)
+  file(GLOB pf_files CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+       ${CMAKE_CURRENT_SOURCE_DIR}/${group}/*.pf)
   foreach(pf ${pf_files})
     get_filename_component(name ${pf} NAME_WE)
     add_pfunit_ctest(${name} TEST_SOURCES ${pf} LINK_LIBRARIES flux_under_test)

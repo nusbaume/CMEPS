@@ -54,7 +54,7 @@ contains
   !-----------------------------------------------------------------------------
   subroutine fixture_init()
     ! Initialize shared module state the same way the CESM driver does (esm.F90).
-    ! Without this, shr_wv_sat_mod's epsilo is uninitialized and qsat is garbage.
+    ! Without this, shr_wv_sat_mod's epsilo is uninitialized and qsat is bad.
     character(len=256) :: errstring
 
     call shr_wv_sat_init(shr_const_tkfrz, shr_const_tktrip, wv_sat_transition_start, &
@@ -65,7 +65,8 @@ contains
 
   !-----------------------------------------------------------------------------
   subroutine fixture_reset()
-    ! Restore all module state that tests may change to its default values.
+    ! Restore water vapor saturation variables back to their default values,
+    ! in case the test modifies them.
 
     call shr_wv_sat_final()
     call shr_flux_adjust_constants( &
@@ -78,7 +79,7 @@ contains
   end subroutine fixture_reset
 
   !-----------------------------------------------------------------------------
-  function make_unstable_state(nMax) result(state)
+  pure function make_unstable_state(nMax) result(state)
     ! Warm ocean under cooler, dry air with moderate wind, repeated at nMax points.
     ! Expected: upward (negative, since fluxes are positive downward) sensible and
     ! latent heat flux, and evaporation.

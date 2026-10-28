@@ -25,8 +25,7 @@ case ${compiler} in
       fc=ifx
       ;;
    gnu)
-      module swap intel gcc/14.3.0 || module load gcc/14.3.0
-      module load cmake pfunit/4.14.0
+      module load gcc/14.3.0 cmake pfunit/4.14.0
       fc=gfortran
       ;;
    *)
