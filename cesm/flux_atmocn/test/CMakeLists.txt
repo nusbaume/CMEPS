@@ -19,7 +19,9 @@ enable_testing()
 #   -DFETCHCONTENT_SOURCE_DIR_CESM_SHARE=/path/to/CESM_share
 #-----------------------------------------------------------------------------
 include(FetchContent)
-set(CESM_SHARE_TAG "share1.1.22" CACHE STRING "CESM_share git tag/sha to test against")
+# Defaults to the head of the CESM_share main branch; set -DCESM_SHARE_TAG=<tag/sha>
+# to test against a specific version instead.
+set(CESM_SHARE_TAG "main" CACHE STRING "CESM_share git branch/tag/sha to test against")
 FetchContent_Declare(cesm_share
   GIT_REPOSITORY https://github.com/ESCOMP/CESM_share.git
   GIT_TAG        ${CESM_SHARE_TAG}

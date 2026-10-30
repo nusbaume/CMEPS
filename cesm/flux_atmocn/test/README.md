@@ -40,8 +40,9 @@ match a regex, and `-V` shows the full pFUnit output.
 
 ## CESM_share
 
-Configuring the tests downloads [CESM_share](https://github.com/ESCOMP/CESM_share) at the
-tag set by `CESM_SHARE_TAG` in `CMakeLists.txt`. Only `shr_kind_mod`, `shr_const_mod` and
+Configuring the tests downloads the head of the [CESM_share](https://github.com/ESCOMP/CESM_share)
+`main` branch. To pin a specific version instead, pass `-DCESM_SHARE_TAG=<tag/sha>` to
+`cmake`. Only `shr_kind_mod`, `shr_const_mod` and
 `shr_wv_sat_mod` are compiled from it. To use a local checkout instead (for example, offline
 or to test in-progress share changes):
 
