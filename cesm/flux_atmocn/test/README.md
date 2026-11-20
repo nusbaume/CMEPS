@@ -45,8 +45,8 @@ This runs every unit test. Add `-V` to the `ctest` command to see the full pFUni
 
 Configuring the tests downloads the head of the [CESM_share](https://github.com/ESCOMP/CESM_share)
 `main` branch. To pin a specific version instead, pass `-DCESM_SHARE_TAG=<tag/sha>` to
-`cmake`. Only `shr_kind_mod`, `shr_const_mod` and
-`shr_wv_sat_mod` are compiled from it. To use a local checkout instead (for example, offline
+`cmake`. Only `shr_kind_mod`, `shr_const_mod`, `shr_water_species_mod`, `shr_wv_sat_mod`,
+`shr_flux_mod` and `shr_wiso_mod` are compiled from it. To use a local checkout instead (for example, offline
 or to test in-progress share changes):
 
 ```bash
@@ -56,6 +56,11 @@ cmake ... -DFETCHCONTENT_SOURCE_DIR_CESM_SHARE=/path/to/CESM_share
 `shr_sys_mod` is replaced by `stubs/shr_sys_mod_stub.F90`, because the real one needs ESMF
 and MPI. In the stub, `shr_sys_abort` raises a pFUnit exception and then returns, so abort
 paths can be tested with `@assertExceptionRaised`.
+
+`shr_wtracers_mod` is replaced by `stubs/shr_wtracers_mod_stub.F90`, because the real one needs
+ESMF and NUOPC. The stub only provides `shr_wtracers_get_species_type`. Tests set each tracer's
+species type with `stub_wtracers_set_species([WATER_SPECIES_TYPE_BULK, ...])` (the constants come
+from the real `shr_water_species_mod`), and `fixture_reset` clears it.
 
 ## Layout
 

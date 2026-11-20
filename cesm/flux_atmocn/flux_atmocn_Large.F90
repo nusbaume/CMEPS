@@ -87,11 +87,11 @@ contains
     real(R8),intent(out),optional :: ssq_sv (nMax)  ! diag: sea surface humidity (kg/kg)
 
     !--- optional water tracer/isotope arguments --------
-    real(R8),intent(in),optional  :: qbot_wtracers(:, nMax) ! water tracer atm specific humidity (kg/kg)
-    real(R8),intent(in),optional  :: roce_wtracers(:, nMax) ! ratio of water tracer to total water in surface ocean (unitless)
+    real(R8),intent(in),optional  :: qbot_wtracers(:,:)     ! water tracer atm specific humidity (kg/kg)
+    real(R8),intent(in),optional  :: roce_wtracers(:,:)     ! ratio of water tracer to total water in surface ocean (unitless)
 
-    real(R8),intent(out),optional :: evap_wtracers(:, nMax) ! water tracer flux: evap ((kg/s)/m^2)
-    real(R8),intent(out),optional :: qref_wtracers(:, nMax) ! diag: water tracer 2m ref humidity (kg/kg)
+    real(R8),intent(out),optional :: evap_wtracers(:,:)     ! water tracer flux: evap ((kg/s)/m^2)
+    real(R8),intent(out),optional :: qref_wtracers(:,:)     ! diag: water tracer 2m ref humidity (kg/kg)
 
     !--- local constants --------------------------------
     real(R8),parameter :: zref  = 10.0_R8 ! reference height (m)
@@ -364,10 +364,10 @@ contains
 
           if (present(ustar_sv)) ustar_sv(n) = spval
           if (present(re_sv   )) re_sv (n) = spval
-          if (present(ssq_sv  )) ssq_sval(n) = spval
+          if (present(ssq_sv  )) ssq_sv(n) = spval
 
           if (present(evap_wtracers)) evap_wtracers(:,n) = spval
-          if (present(qref_wtracers)) qref_tracers(:,n) = spval
+          if (present(qref_wtracers)) qref_wtracers(:,n) = spval
 
        endif
     enddo
@@ -391,6 +391,7 @@ contains
     use shr_wtracers_mod, only: shr_wtracers_get_species_type
     use shr_wiso_mod,     only: wiso_liq_vap_equil_frac_factor
     use shr_wiso_mod,     only: wiso_get_diffusivity_ratio
+    use shr_wiso_mod,     only: icam_atm_ocn_kinetic_frac_factor
 
     ! Input arguments
     real(r8), intent(in) :: ts               ! sea surface temperature [K]
@@ -400,7 +401,6 @@ contains
     real(r8), intent(in) :: ustar            ! surface friction velocity [m s-1]
     real(r8), intent(in) :: re               ! sqrt of exchange coefficient (water) [1]
     real(r8), intent(in) :: qref_interp_fac  ! vertical interpolation factor for reference height [1]
-    real(r8), intent(in) :: roce_wtracers(:) ! sea surface water tracer ratio [1]
     real(r8), intent(in) :: qbot_wtracers(:) ! water tracer specific humidity [kg kg-1]
     real(r8), intent(in) :: roce_wtracers(:) ! ratio of water tracer to bulk water in surface ocean [unitless]
 

@@ -16,6 +16,7 @@ module flux_test_fixtures
   use shr_const_mod,  only : shr_const_latice, shr_const_stebol
   use shr_wv_sat_mod, only : shr_wv_sat_init, shr_wv_sat_final
   use shr_flux_mod,   only : shr_flux_adjust_constants
+  use shr_wtracers_mod, only : stub_wtracers_reset
   use funit,          only : throw
 
   implicit none
@@ -25,6 +26,7 @@ module flux_test_fixtures
   public :: fixture_reset
   public :: flux_inputs_t
   public :: make_unstable_state
+  public :: make_stable_state
 
   ! Tolerances
   real(r8), parameter, public :: tol_exact    = 1.e-13_r8 ! same computation, different path
@@ -66,9 +68,11 @@ contains
   !-----------------------------------------------------------------------------
   subroutine fixture_reset()
     ! Restore water vapor saturation variables back to their default values,
-    ! in case the test modifies them.
+    ! in case the test modifies them, and clear any water tracer species types
+    ! set in the shr_wtracers_mod stub.
 
     call shr_wv_sat_final()
+    call stub_wtracers_reset()
     call shr_flux_adjust_constants( &
          zvir=shr_const_zvir, cpair=shr_const_cpdair, cpvir=shr_const_cpvir, &
          karman=shr_const_karman, gravit=shr_const_g, latvap=shr_const_latvap, &
@@ -106,5 +110,22 @@ contains
     state%ts    = 295.0_r8     ! K
 
   end function make_unstable_state
+
+  !-----------------------------------------------------------------------------
+  pure function make_stable_state(nMax) result(state)
+    ! Cool ocean under warmer, moister air with moderate wind, repeated at nMax points.
+    ! Expected: downward (positive) sensible and latent heat flux, and
+    ! condensation (positive evap) onto the ocean.
+    integer, intent(in) :: nMax
+    type(flux_inputs_t) :: state
+
+    state = make_unstable_state(nMax)
+
+    state%tbot  = 290.0_r8     ! K
+    state%thbot = 290.1_r8     ! K
+    state%qbot  = 0.010_r8     ! kg/kg
+    state%ts    = 285.0_r8     ! K
+
+  end function make_stable_state
 
 end module flux_test_fixtures

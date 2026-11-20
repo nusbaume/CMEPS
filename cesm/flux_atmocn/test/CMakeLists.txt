@@ -35,11 +35,14 @@ set(SHARE_SRC ${cesm_share_SOURCE_DIR}/src)
 #-----------------------------------------------------------------------------
 set(FLUX_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
 add_library(flux_under_test STATIC
-  ${SHARE_SRC}/shr_kind_mod.F90
-  ${SHARE_SRC}/shr_const_mod.F90
-  ${SHARE_SRC}/shr_wv_sat_mod.F90
+  ${SHARE_SRC}/const/shr_kind_mod.F90
+  ${SHARE_SRC}/const/shr_const_mod.F90
+  ${SHARE_SRC}/const/shr_water_species_mod.F90
+  ${SHARE_SRC}/science/shr_wv_sat_mod.F90
+  ${SHARE_SRC}/science/shr_flux_mod.F90
+  ${SHARE_SRC}/science/shr_wiso_mod.F90
   stubs/shr_sys_mod_stub.F90
-  ${FLUX_DIR}/shr_flux_mod.F90
+  stubs/shr_wtracers_mod_stub.F90
   ${FLUX_DIR}/flux_atmocn_Large.F90
   ${FLUX_DIR}/flux_atmocn_COARE_mod.F90
   ${FLUX_DIR}/flux_atmocn_UA_mod.F90

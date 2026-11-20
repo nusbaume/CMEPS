@@ -219,6 +219,8 @@ contains
     real(R8)    :: zo,zot,zoq      ! roughness lengths
     real(R8)    :: hsb,hlb         ! sens & lat heat flxs at zbot
     real(R8)    :: trf,qrf,urf,vrf ! reference-height quantities
+    real(R8)    :: qstar_interp_fac, qref_interp_fac ! cor30a water tracer outputs (unused)
+    real(R8)    :: jcool, dter, Le                   ! cor30a water tracer outputs (unused)
 
     !--- local functions --------------------------------
     real(R8)    :: qsat   ! function: the saturation humididty of air (kg/m^3)
@@ -393,7 +395,9 @@ contains
                   & ,tau,hsb,hlb                             &  ! out: fluxes
                   & ,zo,zot,zoq,hol,ustar,tstar,qstar        &  ! out: ss scales
                   & ,rd,rh,re                                &  ! out: exch. coeffs
-                  & ,trf,qrf,urf,vrf)                             ! out: reference-height params
+                  & ,trf,qrf,urf,vrf                         &  ! out: reference-height params
+                  & ,qstar_interp_fac,qref_interp_fac       &  ! out: water tracer interp. factors (unused here)
+                  & ,jcool,dter,Le)                            ! out: water tracer cool-skin params (unused here)
 
              ! for the sake of maintaining same defs
              hol=zbot(n)/hol
@@ -559,7 +563,9 @@ contains
                      & ,tau,hsb,hlb                             &  ! out: fluxes
                      & ,zo,zot,zoq,hol,ustar,tstar,qstar        &  ! out: ss scales
                      & ,rd,rh,re                                &  ! out: exch. coeffs
-                     & ,trf,qrf,urf,vrf)                               ! out: reference-height params
+                     & ,trf,qrf,urf,vrf                         &  ! out: reference-height params
+                  & ,qstar_interp_fac,qref_interp_fac       &  ! out: water tracer interp. factors (unused here)
+                  & ,jcool,dter,Le)                            ! out: water tracer cool-skin params (unused here)
 
                 ! for the sake of maintaining same defs
                 hol=zbot(n)/hol

@@ -1,0 +1,79 @@
+module test_wtracer_flux_coare
+
+  ! Water tracer tests of flux_atmOcn_COARE (COARE v3.0 bulk scheme)
+
+  use funit
+  use shr_kind_mod,          only : r8 => shr_kind_r8
+  use shr_water_species_mod, only : WATER_SPECIES_TYPE_BULK
+  use shr_wtracers_mod,      only : stub_wtracers_set_species
+  use flux_atmocn_COARE_mod, only : flux_atmOcn_COARE
+  use flux_test_fixtures
+
+  implicit none
+
+  integer, parameter :: logunit = 6
+
+contains
+
+  @before
+  subroutine setUp()
+    call fixture_init()
+  end subroutine setUp
+
+  @after
+  subroutine tearDown()
+    call fixture_reset()
+  end subroutine tearDown
+
+  !-----------------------------------------------------------------------------
+  subroutine check_bulk_tracer_matches_bulk_water(state)
+    ! Run the scheme with one bulk-type water tracer that has the same water masses
+    ! as regular (bulk) water, in both the atmosphere (qbot_wtracers = qbot) and the
+    ! ocean (roce_wtracers = 1), and check that the tracer's evaporative flux and
+    ! two-meter reference humidity match those of bulk water.
+    type(flux_inputs_t), intent(in) :: state
+
+    integer, parameter :: nTracers = 1
+    real(r8), dimension(state%nMax) :: sen, lat, lwup, evap, taux, tauy, tref, qref
+    real(r8), dimension(state%nMax) :: duu10n, ugust_out, u10res
+    real(r8), dimension(nTracers, state%nMax) :: qbot_wtracers, roce_wtracers
+    real(r8), dimension(nTracers, state%nMax) :: evap_wtracers, qref_wtracers
+    integer :: n
+
+    call stub_wtracers_set_species([WATER_SPECIES_TYPE_BULK])
+
+    qbot_wtracers(1,:) = state%qbot
+    roce_wtracers(1,:) = 1.0_r8
+
+    call flux_atmOcn_COARE(logunit=logunit, spval=test_spval, nMax=state%nMax, &
+         zbot=state%zbot, ubot=state%ubot, vbot=state%vbot, thbot=state%thbot, &
+         qbot=state%qbot, rainc=state%rainc, rbot=state%rbot, &
+         tbot=state%tbot, us=state%us, vs=state%vs, pslv=state%pslv, &
+         ts=state%ts, mask=state%mask, seq_flux_atmocn_minwind=test_minwind, &
+         sen=sen, lat=lat, lwup=lwup, evap=evap, &
+         taux=taux, tauy=tauy, tref=tref, qref=qref, &
+         aofluxes_use_shr_wv_sat=.true., &
+         duu10n=duu10n, ugust_out=ugust_out, u10res=u10res, &
+         qbot_wtracers=qbot_wtracers, roce_wtracers=roce_wtracers, &
+         evap_wtracers=evap_wtracers, qref_wtracers=qref_wtracers)
+
+    do n = 1, state%nMax
+       @assertEqual(evap(n), evap_wtracers(1,n), tolerance=tol_exact*abs(evap(n)))
+       @assertEqual(qref(n), qref_wtracers(1,n), tolerance=tol_exact*abs(qref(n)))
+    end do
+
+  end subroutine check_bulk_tracer_matches_bulk_water
+
+  @test
+  subroutine test_bulk_tracer_matches_bulk_water_unstable()
+    ! Bulk tracer equals bulk water for evaporation from a warm ocean.
+    call check_bulk_tracer_matches_bulk_water(make_unstable_state(nMax=1))
+  end subroutine test_bulk_tracer_matches_bulk_water_unstable
+
+  @test
+  subroutine test_bulk_tracer_matches_bulk_water_stable()
+    ! Bulk tracer equals bulk water for condensation onto a cool ocean.
+    call check_bulk_tracer_matches_bulk_water(make_stable_state(nMax=1))
+  end subroutine test_bulk_tracer_matches_bulk_water_stable
+
+end module test_wtracer_flux_coare

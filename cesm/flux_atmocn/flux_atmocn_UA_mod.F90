@@ -47,10 +47,8 @@ contains
        ts, mask, sen, lat, lwup, evap,      &
        taux, tauy, tref, qref,              &
        duu10n,  ustar_sv, re_sv, ssq_sv,    &
-       qbot_wtracers=shum_wtracers,         &
-       roce_wtracers=roce_wtracers,         &
-       evap_wtracers=evap_wtracers,         &
-       qref_wtracers=qref_wtracers)
+       qbot_wtracers, roce_wtracers,        &
+       evap_wtracers, qref_wtracers)
 
     !--- input arguments --------------------------------
     integer    ,intent(in) :: logunit
@@ -85,11 +83,11 @@ contains
     real(R8),intent(out),optional :: ssq_sv (nMax) ! diag: sea surface humidity (kg/kg)
 
     !--- optional water tracer/isotope arguments --------
-    real(R8),intent(in),optional  :: qbot_wtracers(:, nMax) ! water tracer atm specific humidity (kg/kg)
-    real(R8),intent(in),optional  :: roce_wtracers(:, nMax) ! ratio of water tracer to total water in surface ocean (unitless)
+    real(R8),intent(in),optional  :: qbot_wtracers(:,:)     ! water tracer atm specific humidity (kg/kg)
+    real(R8),intent(in),optional  :: roce_wtracers(:,:)     ! ratio of water tracer to total water in surface ocean (unitless)
 
-    real(R8),intent(out),optional :: evap_wtracers(:, nMax) ! water tracer flux: evap ((kg/s)/m^2)
-    real(R8),intent(out),optional :: qref_wtracers(:, nMax) ! diag: water tracer 2m ref humidity (kg/kg)
+    real(R8),intent(out),optional :: evap_wtracers(:,:)     ! water tracer flux: evap ((kg/s)/m^2)
+    real(R8),intent(out),optional :: qref_wtracers(:,:)     ! diag: water tracer 2m ref humidity (kg/kg)
 
     !--- local constants --------------------------------
     real(R8),parameter :: zetam = -1.574_R8 ! Very unstable zeta cutoff for momentum (-)
@@ -435,7 +433,7 @@ contains
           !------------------------------------------------------------
           if (present(qbot_wtracers)) then
              call wtracer_atmocn_flux_UA(ts(n),   ssq,   rbot(n), &
-                                         zbot(n), ustar, zoq      &
+                                         zbot(n), ustar, zoq,     &
                                          re, qref_interp_fac,     &
                                          roce_wtracerS(:,n),      &
                                          qbot_wtracers(:,n),      &
@@ -465,7 +463,7 @@ contains
           if (present(ssq_sv  )) ssq_sv  (n) = spval
 
           if (present(evap_wtracers)) evap_wtracers(:,n) = spval
-          if (present(qref_wtracers)) qref_tracers(:,n) = spval
+          if (present(qref_wtracers)) qref_wtracers(:,n) = spval
 
        endif
 
@@ -572,6 +570,7 @@ contains
     use shr_wtracers_mod, only: shr_wtracers_get_species_type
     use shr_wiso_mod,     only: wiso_liq_vap_equil_frac_factor
     use shr_wiso_mod,     only: wiso_get_diffusivity_ratio
+    use shr_wiso_mod,     only: icam_atm_ocn_kinetic_frac_factor
 
     ! Input arguments
     real(r8), intent(in) :: ts               ! sea surface temperature [K]
@@ -582,7 +581,6 @@ contains
     real(r8), intent(in) :: zoq              ! roughness length for water vapor [m]
     real(r8), intent(in) :: re               ! sqrt of exchange coefficient (water) [1]
     real(r8), intent(in) :: qref_interp_fac  ! vertical interpolation factor for reference height [1]
-    real(r8), intent(in) :: roce_wtracers(:) ! sea surface water tracer ratio [1]
     real(r8), intent(in) :: qbot_wtracers(:) ! water tracer specific humidity [kg kg-1]
     real(r8), intent(in) :: roce_wtracers(:) ! ratio of water tracer to bulk water in surface ocean [unitless]
 
@@ -591,8 +589,8 @@ contains
     real(r8), intent(out) :: qref_wtracers(:) ! reference (two meter) water tracer specific humidity [kg kg-1]
 
     ! Local variables
-    real(r8) :: zoq, equil_frac, kinetic_frac, diff_ratio
-    real(r8) :: wt_ssq
+    real(r8) :: equil_frac, kinetic_frac, diff_ratio
+    real(r8) :: wt_ssq, wt_qstar
     integer :: wtrac_idx, iso_spc_idx
 
     ! Loop over water tracers:
@@ -619,7 +617,7 @@ contains
       evap_wtracers(wtrac_idx) = rbot * kinetic_frac* wt_qstar * ustar
 
       ! Calculate two meter reference humidity:
-      qref(n) = qbot_wtracers(wtrac_idx) + (wt_ qstar/loc_karman) * qref_interp_fac
+      qref_wtracers(wtrac_idx) = qbot_wtracers(wtrac_idx) + (wt_qstar/loc_karman) * qref_interp_fac
 
     end do !water tracers
 
