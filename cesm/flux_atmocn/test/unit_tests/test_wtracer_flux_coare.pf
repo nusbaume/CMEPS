@@ -13,6 +13,9 @@ module test_wtracer_flux_coare
 
   integer, parameter :: logunit = 6
 
+  ! Tracer/bulk water ratios used by the scaling tests
+  real(r8), parameter :: test_ratios(3) = [0.5_r8, 2.0e-3_r8, 3.0_r8]
+
 contains
 
   @before
@@ -26,12 +29,14 @@ contains
   end subroutine tearDown
 
   !-----------------------------------------------------------------------------
-  subroutine check_bulk_tracer_matches_bulk_water(state)
-    ! Run the scheme with one bulk-type water tracer that has the same water masses
-    ! as regular (bulk) water, in both the atmosphere (qbot_wtracers = qbot) and the
-    ! ocean (roce_wtracers = 1), and check that the tracer's evaporative flux and
-    ! two-meter reference humidity match those of bulk water.
+  subroutine check_bulk_tracer_scales_with_bulk_water(state, ratio)
+    ! Run the scheme with one bulk-type water tracer whose water masses are a constant
+    ! ratio of regular (bulk) water, in both the atmosphere (qbot_wtracers = ratio*qbot)
+    ! and the ocean (roce_wtracers = ratio), and check that the tracer's evaporative
+    ! flux and two-meter reference humidity are that same ratio of bulk water's.
+    ! With ratio = 1 the tracer must match bulk water.
     type(flux_inputs_t), intent(in) :: state
+    real(r8),            intent(in) :: ratio ! tracer / bulk water ratio
 
     integer, parameter :: nTracers = 1
     real(r8), dimension(state%nMax) :: sen, lat, lwup, evap, taux, tauy, tref, qref
@@ -42,8 +47,8 @@ contains
 
     call stub_wtracers_set_species([WATER_SPECIES_TYPE_BULK])
 
-    qbot_wtracers(1,:) = state%qbot
-    roce_wtracers(1,:) = 1.0_r8
+    qbot_wtracers(1,:) = ratio * state%qbot
+    roce_wtracers(1,:) = ratio
 
     call flux_atmOcn_COARE(logunit=logunit, spval=test_spval, nMax=state%nMax, &
          zbot=state%zbot, ubot=state%ubot, vbot=state%vbot, thbot=state%thbot, &
@@ -58,22 +63,45 @@ contains
          evap_wtracers=evap_wtracers, qref_wtracers=qref_wtracers)
 
     do n = 1, state%nMax
-       @assertEqual(evap(n), evap_wtracers(1,n), tolerance=tol_exact*abs(evap(n)))
-       @assertEqual(qref(n), qref_wtracers(1,n), tolerance=tol_exact*abs(qref(n)))
+       @assertEqual(ratio*evap(n), evap_wtracers(1,n), tolerance=tol_exact*abs(ratio*evap(n)))
+       @assertEqual(ratio*qref(n), qref_wtracers(1,n), tolerance=tol_exact*abs(ratio*qref(n)))
     end do
 
-  end subroutine check_bulk_tracer_matches_bulk_water
+  end subroutine check_bulk_tracer_scales_with_bulk_water
 
   @test
   subroutine test_bulk_tracer_matches_bulk_water_unstable()
     ! Bulk tracer equals bulk water for evaporation from a warm ocean.
-    call check_bulk_tracer_matches_bulk_water(make_unstable_state(nMax=1))
+    call check_bulk_tracer_scales_with_bulk_water(make_unstable_state(nMax=1), ratio=1.0_r8)
   end subroutine test_bulk_tracer_matches_bulk_water_unstable
 
   @test
   subroutine test_bulk_tracer_matches_bulk_water_stable()
     ! Bulk tracer equals bulk water for condensation onto a cool ocean.
-    call check_bulk_tracer_matches_bulk_water(make_stable_state(nMax=1))
+    call check_bulk_tracer_scales_with_bulk_water(make_stable_state(nMax=1), ratio=1.0_r8)
   end subroutine test_bulk_tracer_matches_bulk_water_stable
+
+  @test
+  subroutine test_bulk_tracer_scales_with_bulk_water_unstable()
+    ! Bulk tracer evaporation and two-meter humidity scale with the tracer/bulk
+    ! water ratio, for evaporation from a warm ocean. The ratios cover a
+    ! fraction, an isotope-like ratio (~H218O/H2O) and a ratio above one.
+    integer :: i
+    do i = 1, size(test_ratios)
+       call check_bulk_tracer_scales_with_bulk_water(make_unstable_state(nMax=1), test_ratios(i))
+       if (anyExceptions()) return
+    end do
+  end subroutine test_bulk_tracer_scales_with_bulk_water_unstable
+
+  @test
+  subroutine test_bulk_tracer_scales_with_bulk_water_stable()
+    ! Bulk tracer condensation and two-meter humidity scale with the tracer/bulk
+    ! water ratio, for condensation onto a cool ocean.
+    integer :: i
+    do i = 1, size(test_ratios)
+       call check_bulk_tracer_scales_with_bulk_water(make_stable_state(nMax=1), test_ratios(i))
+       if (anyExceptions()) return
+    end do
+  end subroutine test_bulk_tracer_scales_with_bulk_water_stable
 
 end module test_wtracer_flux_coare
